@@ -133,7 +133,7 @@ class Network(torch.nn.Module):
 
         layer.train(self.learning)
         layer.compute_decays(self.dt)
-        layer.set_batch_size(self.batch_size)
+        layer.set_batch_size(self.batch_size, init_batch_sign=True)
 
 
     def add_connection(
@@ -258,7 +258,7 @@ class Network(torch.nn.Module):
 
 
     def run(
-        self, inputs: Dict[str, torch.Tensor], time: int, one_step=False, **kwargs
+        self, inputs: Dict[str, torch.Tensor], time: int, init_batch_sign=True, one_step=False, **kwargs
     ) -> None:
         # language=rst
         """
@@ -353,16 +353,12 @@ class Network(torch.nn.Module):
                     self.batch_size = inputs[key].size(1)
 
                     for l in self.layers:
-                        self.layers[l].set_batch_size(self.batch_size)
+                        self.layers[l].set_batch_size(self.batch_size, init_batch_sign)
 
                     for m in self.monitors:
                         self.monitors[m].reset_state_variables()
 
                 break
-
-        # Update SAF mask
-        for l in self.layers:
-            self.layers[l].update_SAF_mask()
 
         # Effective number of timesteps.
         timesteps = int(time / self.dt)

@@ -1,11 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-Created on Wed Jul 19 18:46:30 2023
-
-@author: jwxu
-"""
-
 import argparse
 import torchvision
 import torchvision.transforms as transforms
@@ -20,28 +12,31 @@ from module import *
 
 
 parser = argparse.ArgumentParser(description='Memristor-based PyTorch CIFAR10 Training')
-parser.add_argument("--seed", type=int, default=0)
+# network configuration
+parser.add_argument("--seed", type=int, default=0) # Random seed
 parser.add_argument("--gpu", dest="gpu", action="store_true", default='gpu')
-parser.add_argument("--rep", type=int, default=10)
+parser.add_argument("--rep", type=int, default=10) # Number of repetitions for the experiment
 parser.add_argument("--train_batch_size", type=int, default=200)
 parser.add_argument("--test_batch_size", type=int, default=100)
 parser.add_argument('--lr', default=0.1, type=float, help='learning rate')
-parser.add_argument("--memristor_structure", type=str, default='crossbar') # trace, mimo or crossbar
-parser.add_argument("--memristor_device", type=str, default='new_ferro') # ideal, ferro, or hu
+# memristor device configuration
+parser.add_argument("--memristor_device", type=str, default='ideal') # ideal, ferro, MF, CMS, or mine
 parser.add_argument("--c2c_variation", type=bool, default=False)
 parser.add_argument("--d2d_variation", type=int, default=0) # 0: No d2d variation, 1: both, 2: Gon/Goff only, 3: nonlinearity only
 parser.add_argument("--stuck_at_fault", type=bool, default=False)
-parser.add_argument("--retention_loss", type=int, default=0) # retention loss, 0: without it, 1: during pulse, 2: no pluse for a long time
+parser.add_argument("--retention_loss", type=bool, default=False)
 parser.add_argument("--aging_effect", type=int, default=0) # 0: No aging effect, 1: equation 1, 2: equation 2
-parser.add_argument("--input_bit", type=int, default=8)
-parser.add_argument("--ADC_precision", type=int, default=16)
-parser.add_argument("--ADC_setting", type=int, default=4)  # 2:two memristor crossbars use one ADC; 4:one memristor crossbar use one ADC
+# circuit configuration
+parser.add_argument("--memristor_structure", type=str, default='crossbar') # crossbar
+parser.add_argument("--input_bit", type=int, default=8) # 1 for STDP, 2-64 for MLP & CNN
+parser.add_argument("--ADC_precision", type=int, default=16) # 2-32
+parser.add_argument("--ADC_setting", type=int, default=4) # 2: Two memristor crossbars share one ADC; 4: one memristor crossbar uses one ADC
 parser.add_argument("--ADC_rounding_function", type=str, default='floor')  # floor or round
-parser.add_argument("--wire_width", type=int, default=200) # In practice, wire_width shall be set around 1/2 of the memristor size; Hu: 10um; Ferro:200nm;
-parser.add_argument("--CMOS_technode", type=int, default=32)
-parser.add_argument("--device_roadmap", type=str, default='HP')  # HP: High Performance or LP: Low Power
-parser.add_argument("--temperature", type=int, default=300)
-parser.add_argument("--hardware_estimation", type=int, default=True)
+parser.add_argument("--wire_width", type=int, default=200) # In practice, wire_width shall be set around 1/2 of the memristor size; Ideal: 200nm, Ferro: 200nm, MF: 10um, CMS: 10um 
+parser.add_argument("--CMOS_technode", type=int, default=32) # 7, 10, 14, 22, 32, 45, 65, 90, 130(nm)
+parser.add_argument("--device_roadmap", type=str, default='HP') # HP: High Performance or LP: Low Power
+parser.add_argument("--temperature", type=int, default=300) # Temperature will only affect the peripheral circuits, not the memristor itself
+parser.add_argument("--hardware_estimation", type=int, default=False)
 args = parser.parse_args()
 
 
@@ -64,13 +59,13 @@ def train(epoch):
         # Memristor write
         for layer in net.features.children():
             if isinstance(layer, Mem_Conv2d):
+                layer.mem_update()
                 if args.stuck_at_fault == True:
                     layer.crossbar.update_SAF_mask()
-                layer.mem_update()
         if isinstance(net.classifier, Mem_Linear):
+            net.classifier.mem_update()
             if args.stuck_at_fault == True:
                 net.classifier.crossbar.update_SAF_mask()
-            net.classifier.mem_update()
 
         train_loss += loss.item()
         _, predicted = outputs.max(1)
@@ -117,7 +112,6 @@ def test(epoch):
 
 if __name__ == '__main__':
     # Sets up Gpu use
-    os.environ["CUDA_VISIBLE_DEVICES"] = ','.join(map(str, [2]))
     seed = args.seed
     gpu = args.gpu
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -135,7 +129,7 @@ if __name__ == '__main__':
                   'c2c_variation': args.c2c_variation, 'd2d_variation': args.d2d_variation,
                   'stuck_at_fault': args.stuck_at_fault, 'retention_loss': args.retention_loss,
                   'aging_effect': args.aging_effect, 'wire_width': args.wire_width, 'input_bit': args.input_bit,
-                  'batch_interval': 1, 'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
+                  'CMOS_technode': args.CMOS_technode, 'ADC_precision': args.ADC_precision,
                   'ADC_setting': args.ADC_setting, 'ADC_rounding_function': args.ADC_rounding_function,
                   'device_roadmap': args.device_roadmap, 'temperature': args.temperature,
                   'hardware_estimation': args.hardware_estimation}
@@ -191,13 +185,13 @@ if __name__ == '__main__':
     # Memristor write
     for layer in net.features.children():
         if isinstance(layer, Mem_Conv2d):
+            layer.mem_update()
             if args.stuck_at_fault == True:
                 layer.crossbar.update_SAF_mask()
-            layer.mem_update()
     if isinstance(net.classifier, Mem_Linear):
+        net.classifier.mem_update()
         if args.stuck_at_fault == True:
             net.classifier.crossbar.update_SAF_mask()
-        net.classifier.mem_update()
 
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=0.9, weight_decay=5e-4)
@@ -207,4 +201,3 @@ if __name__ == '__main__':
         train(epoch)
         test(epoch)
         scheduler.step()
-

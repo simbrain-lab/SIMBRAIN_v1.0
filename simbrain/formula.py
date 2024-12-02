@@ -15,12 +15,9 @@ class Formula(torch.nn.Module):
         # language=rst
         """
         Abstract base class constructor.
-
         :param sim_params: Memristor device to be used in learning.
         :param shape: The dimensionality of the crossbar.
-        :param memristor_info_dict: The parameters of the memristor device.
-        :param length_row: The physical length of the horizontal wire in the crossbar.
-        :param length_col: The physical length of the vertical wire in the crossbar.
+        :param CMOS_tech_info_dict: The parameters of CMOS technology.
         """
         super().__init__()
 
@@ -64,10 +61,28 @@ class Formula(torch.nn.Module):
 
 
     def calculate_gate_cap(self, width):
+        # language=rst
+        """
+        Calculate MOSFET gate capacitance.
+    
+        :param width: the gate width of the transistor.
+        """
         return (self.cap_ideal_gate + self.cap_overlap + self.cap_fringe) * width + self.phy_gate_length * self.cap_polywire
 
 
     def calculate_gate_area(self, gateType, numInput, widthNMOS, widthPMOS, heightTransistorRegion):
+        # language=rst
+        """
+        Calculate layout area and width of logic gate given fixed layout height.
+    
+        :param gateType: Type of logic gate, such as "INV", "NAND", or "NOR".
+        :param numInput: Input number.
+        :param widthNMOS: The width of NMOS.
+        :param widthPMOS: The width of PMOS.
+        :param heightTransistorRegion: The height of the transistor region.
+        :param width: The width of logic gate
+        :param height: The height of logic gate
+        """
         ratio = widthPMOS / (widthPMOS + widthNMOS)
         numFoldedPMOS = 1
         numFoldedNMOS = 1
@@ -176,6 +191,18 @@ class Formula(torch.nn.Module):
 
 
     def calculate_gate_capacitance(self, gateType, numInput, widthNMOS, widthPMOS, heightTransistorRegion):
+        # language=rst
+        """
+        Calculate the capacitance of a logic gate.
+    
+        :param gateType: Type of logic gate, such as "INV", "NAND", or "NOR".
+        :param numInput: Input number.
+        :param widthNMOS: The width of NMOS.
+        :param widthPMOS: The width of PMOS.
+        :param heightTransistorRegion: The height of the transistor region.
+        :param cap_input: The total input capacitance of the gate.
+        :param cap_output: The total output capacitance of the gate.
+        """
         ratio = widthPMOS / (widthPMOS + widthNMOS)
         numFoldedPMOS = 1
         numFoldedNMOS = 1
@@ -352,6 +379,14 @@ class Formula(torch.nn.Module):
 
 
     def calculate_on_resistance(self, width, CMOS_type):
+        # language=rst
+        """
+        Calculate the resistance of CMOS transistor.
+    
+        :param width: The physical width of the transistor channel.
+        :param CMOS_type: Type of CMOS transistor. Possible values are "NMOS" or "PMOS".
+        :param r: Resistance of CMOS transistor.
+        """
         if self.tempIndex > 100 or self.tempIndex < 0:
             print("Error: Temperature is out of range")
             exit(-1)
@@ -366,6 +401,16 @@ class Formula(torch.nn.Module):
 
 
     def calculate_pass_gate_area(self, widthNMOS, widthPMOS, numFold):
+        # language=rst
+        """
+        Calculate layout area, height and width of pass gate given the number of folding on the pass gate width
+    
+        :param widthNMOS: The width of NMOS.
+        :param widthPMOS: The width of PMOS.
+        :param numFold: Number of folding.
+        :param width: The width of pass gate.
+        :param height: The height of pass gate.
+        """
         if self.CMOS_technode >= 22:  # Bulk
             width = (numFold + 1) * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
             height = widthPMOS / numFold + widthNMOS / numFold + self.MIN_GAP_BET_P_AND_N_DIFFS * self.CMOS_technode_meter + (

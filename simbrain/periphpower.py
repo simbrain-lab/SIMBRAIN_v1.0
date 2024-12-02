@@ -24,6 +24,7 @@ class DAC_Module_Power(torch.nn.Module):
         :param sim_params: Memristor device to be used in learning.
         :param shape: The dimensionality of the crossbar.
         :param memristor_info_dict: The parameters of the memristor device.
+        :param CMOS_tech_info_dict: The parameters of CMOS technology.
         :param length_row: The physical length of the horizontal wire in the crossbar.
         :param length_col: The physical length of the vertical wire in the crossbar.
         """
@@ -78,6 +79,10 @@ class DAC_Module_Power(torch.nn.Module):
 
 
     def switch_matrix_read_initialize(self) -> None:
+        # language=rst
+        """
+        Initializes parameters for the switch matrix in the DAC module during memristor read operation.
+        """
         res_mem_cell_on_at_vw = 1 / self.Goff
         resTg = res_mem_cell_on_at_vw / self.shape[1] * self.IR_DROP_TOLERANCE
         min_cell_height = self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
@@ -103,18 +108,24 @@ class DAC_Module_Power(torch.nn.Module):
                                                                                                    widthPMOS=switch_matrix_read_width_tg_P,
                                                                                                    heightTransistorRegion=switch_matrix_read_height)
         self.switch_matrix_read_energy = 0
-        self.switch_matrix_read_energy_1 = 0
 
 
     def switch_matrix_row_write_initialize(self) -> None:
+        # language=rst
+        """
+        Initializes parameters for the horizontal switch matrix in the DAC module during memristor write operation.
+        """
         self.switch_matrix_row_write_cap_gateN = self.switch_matrix_read_cap_gateN
         self.switch_matrix_row_write_cap_gateP = self.switch_matrix_read_cap_gateP
         self.switch_matrix_row_write_cap_tg_drain = self.switch_matrix_read_cap_tg_drain
         self.switch_matrix_row_write_energy = 0
-        self.switch_matrix_row_write_energy_1 = 0
 
 
     def switch_matrix_col_write_initialize(self) -> None:
+        # language=rst
+        """
+        Initializes parameters for the vertical switch matrix in the DAC module during memristor write operation.
+        """
         num_row_tg_pair = 1
         min_cell_width = 2 * (self.POLY_WIDTH + self.MIN_GAP_BET_GATE_POLY) * self.CMOS_technode_meter
 
@@ -146,12 +157,14 @@ class DAC_Module_Power(torch.nn.Module):
                                                                                                         widthPMOS=switch_matrix_col_write_width_tg_P,
                                                                                                         heightTransistorRegion=switch_matrix_col_write_height)
         self.switch_matrix_col_write_energy = 0
-        self.switch_matrix_col_write_energy_1 = 0
         self.switch_matrix_reset_energy = 0
-        self.switch_matrix_reset_energy_1 = 0
 
 
     def DFF_initialize(self) -> None:
+        # language=rst
+        """
+        Initializes parameters for the DFFs in the DAC module.
+        """
         DFF_width_inv_N = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         DFF_width_inv_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         DFF_height_inv = self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
@@ -169,16 +182,26 @@ class DAC_Module_Power(torch.nn.Module):
         self.DFF_energy = 0
 
     def switch_matrix_read_energy_calculation(self, activity_read, mem_v_shape) -> None:
-        read_times = mem_v_shape[0] * mem_v_shape[1] * self.input_bit
+        # language=rst
+        """
+        Calculate energy for switch matrix during memristor read operation.
+
+        :param activity_read: Lines to be readout/total number of rows in the crossbar.
+        :param mem_v_shape: The shape of the voltage tensor, where mem_v_shape[1]=crossbar_row, mem_v_shape[2]=crossbar_col.
+        """
+        read_times = mem_v_shape[1] * mem_v_shape[2] * self.input_bit
         self.switch_matrix_read_energy += (self.switch_matrix_read_cap_tg_drain * 3) * self.read_v_amp * self.read_v_amp * activity_read * self.shape[0] * read_times
         self.switch_matrix_read_energy += (self.switch_matrix_read_cap_gateN + self.switch_matrix_read_cap_gateP) * self.vdd * self.vdd * activity_read * self.shape[0] * read_times
-        self.switch_matrix_read_energy_1 += (self.switch_matrix_read_cap_tg_drain * 3) * self.read_v_amp * self.read_v_amp * activity_read * self.shape[0] * read_times
-        self.switch_matrix_read_energy_1 += (self.switch_matrix_read_cap_gateN + self.switch_matrix_read_cap_gateP) * self.vdd * self.vdd * activity_read * self.shape[0] * read_times
-        self.DFF_read_energy += self.DFF_energy_calculation(DFF_num=self.shape[0], DFF_read=read_times)
         self.switch_matrix_read_energy += self.DFF_energy_calculation(DFF_num=self.shape[0], DFF_read=read_times)
 
 
     def switch_matrix_col_write_energy_calculation(self, mem_v) -> None:
+        # language=rst
+        """
+        Calculate energy for vertical switch matrix during memristor write operation.
+
+        :param mem_v: Voltage inputs to the memristor array during the write operation.
+        """
         mem_v_amp_pos = torch.max(mem_v)
         mem_v_amp_neg = torch.min(mem_v)
         mem_pos_num = (mem_v > 0).sum().item()
@@ -186,35 +209,43 @@ class DAC_Module_Power(torch.nn.Module):
         self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_pos * mem_v_amp_pos * mem_pos_num
         self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_neg * mem_v_amp_neg * mem_neg_num
         self.switch_matrix_col_write_energy += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * (mem_neg_num + mem_pos_num)
-        self.switch_matrix_col_write_energy_1 += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_pos * mem_v_amp_pos * mem_pos_num
-        self.switch_matrix_col_write_energy_1 += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp_neg * mem_v_amp_neg * mem_neg_num
-        self.switch_matrix_col_write_energy_1 += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * (mem_neg_num + mem_pos_num)
-        self.DFF_col_write_energy += self.DFF_energy_calculation(self.shape[1], self.shape[0]*self.batch_size)
         self.switch_matrix_col_write_energy += self.DFF_energy_calculation(self.shape[1], self.shape[0]*self.batch_size)
 
 
     def switch_matrix_row_write_energy_calculation(self, mem_v_amp) -> None:
-        self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_tg_drain * 3) * 1/2 * mem_v_amp * 1/2 * mem_v_amp * self.batch_size * (self.shape[0]-1) * self.shape[0]
+        # language=rst
+        """
+        Calculate energy for horizontal switch matrix during memristor write operation.
+
+        :param mem_v_amp: Amplified voltage inputs to the memristor array during the write operation.
+        """
+        self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_tg_drain * 3) * 1/2 * mem_v_amp * 1/2 * mem_v_amp * self.batch_size * (self.shape[0] - 1) * self.shape[0]
         self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[0]
         self.switch_matrix_row_write_energy += (self.switch_matrix_row_write_cap_gateN + self.switch_matrix_row_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[0] * self.shape[0]
-        self.switch_matrix_row_write_energy_1 += (self.switch_matrix_row_write_cap_tg_drain * 3) * 1/2 * mem_v_amp * 1/2 * mem_v_amp * self.batch_size * (self.shape[0]-1) * self.shape[0]
-        self.switch_matrix_row_write_energy_1 += (self.switch_matrix_row_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[0]
-        self.switch_matrix_row_write_energy_1 += (self.switch_matrix_row_write_cap_gateN + self.switch_matrix_row_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[0] * self.shape[0]
-        self.DFF_row_write_energy += self.DFF_energy_calculation(self.shape[0], self.shape[0]*self.batch_size)
         self.switch_matrix_row_write_energy += self.DFF_energy_calculation(self.shape[0], self.shape[0]*self.batch_size)
 
 
     def switch_matrix_reset_energy_calculation(self, mem_v) -> None:
+        # language=rst
+        """
+        Calculate energy for switch matrix during memristor reset operation.
+
+        :param mem_v: Voltage inputs to the memristor array during the reset operation.
+        """
         mem_v_amp = torch.min(mem_v)
         self.switch_matrix_reset_energy += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[1]
         self.switch_matrix_reset_energy += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[1]
-        self.switch_matrix_reset_energy_1 += (self.switch_matrix_col_write_cap_tg_drain * 3) * mem_v_amp * mem_v_amp * self.batch_size * self.shape[1]
-        self.switch_matrix_reset_energy_1 += (self.switch_matrix_col_write_cap_gateN + self.switch_matrix_col_write_cap_gateP) * self.vdd * self.vdd * self.batch_size * self.shape[1]
-        self.DFF_energy_reset += self.DFF_energy_calculation(self.shape[1], self.batch_size)
         self.switch_matrix_reset_energy += self.DFF_energy_calculation(self.shape[1], self.batch_size)
 
 
     def DFF_energy_calculation(self, DFF_num, DFF_read) -> None:
+        # language=rst
+        """
+        Calculate energy for DFFs in the DAC module.
+
+        :param DFF-num: The number of DFFs.
+        :param DFF-read: Times of DFF being used.
+        """
         self.DFF_energy = 0
         # Assume input D=1 and the energy of CLK INV and CLK TG are for 1 clock cycles
         # CLK INV (all DFFs have energy consumption)
@@ -233,7 +264,7 @@ class DAC_Module_Power(torch.nn.Module):
     def DAC_energy_calculation(self, mem_t) -> None:
         # language=rst
         """
-        Calculate total energy for memrisotr crossbar. Called when power is reported.
+        Calculate total energy for DAC. 
 
         :param mem_t: Time of the memristor crossbar.
         """
@@ -241,17 +272,9 @@ class DAC_Module_Power(torch.nn.Module):
                                 self.switch_matrix_read_energy + self.switch_matrix_reset_energy
         self.DAC_average_power = self.DAC_total_energy / (torch.max(mem_t) * self.dt)
         self.sim_power = {'switch_matrix_reset_energy': self.switch_matrix_reset_energy,
-                          'switch_matrix_reset_energy_1': self.switch_matrix_reset_energy_1,
-                          'DFF_energy_reset': self.DFF_energy_reset,
                           'switch_matrix_col_write_energy': self.switch_matrix_col_write_energy,
-                          'switch_matrix_col_write_energy_1': self.switch_matrix_col_write_energy_1,
-                          'DFF_col_write_energy': self.DFF_col_write_energy,
                           'switch_matrix_row_write_energy': self.switch_matrix_row_write_energy,
-                          'switch_matrix_row_write_energy_1': self.switch_matrix_row_write_energy_1,
-                          'DFF_row_write_energy': self.DFF_row_write_energy,
                           'switch_matrix_read_energy': self.switch_matrix_read_energy,
-                          'switch_matrix_read_energy_1': self.switch_matrix_read_energy_1,
-                          'DFF_read_energy': self.DFF_read_energy,
                           'DAC_total_energy': self.DAC_total_energy,
                           'DAC_average_power': self.DAC_average_power}
 
@@ -276,8 +299,7 @@ class ADC_Module_Power(torch.nn.Module):
         :param sim_params: Memristor device to be used in learning.
         :param shape: The dimensionality of the crossbar.
         :param memristor_info_dict: The parameters of the memristor device.
-        :param length_row: The physical length of the horizontal wire in the crossbar.
-        :param length_col: The physical length of the vertical wire in the crossbar.
+        :param CMOS_tech_info_dict: The parameters of CMOS technology.
         """
         super().__init__()
         self.shape = shape
@@ -319,6 +341,10 @@ class ADC_Module_Power(torch.nn.Module):
 
 
     def DFF_initialize(self) -> None:
+        # language=rst
+        """
+        Initializes parameters for the DFFs in the ADC module.
+        """
         DFF_width_inv_N = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         DFF_width_inv_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         DFF_height_inv =  self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
@@ -335,6 +361,10 @@ class ADC_Module_Power(torch.nn.Module):
 
 
     def adder_initialize(self) -> None:
+        # language=rst
+        """
+        Initializes parameters for the adder in the ADC module.
+        """
         adder_width_nand_N = 2 * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         adder_width_nand_P = self.pn_size_ratio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         adder_height_nand =  self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
@@ -344,6 +374,13 @@ class ADC_Module_Power(torch.nn.Module):
         self.shift_add_add = 0
 
     def DFF_energy_calculation(self, DFF_num, DFF_read) -> None:
+        # language=rst
+        """
+        Calculate energy for DFFs in the ADC module.
+
+        :param DFF-num: The number of DFFs.
+        :param DFF-read: Times of DFF being used.
+        """
         self.DFF_energy = 0
         # Assume input D=1 and the energy of CLK INV and CLK TG are for 1 clock cycles
         # CLK INV (all DFFs have energy consumption)
@@ -360,6 +397,12 @@ class ADC_Module_Power(torch.nn.Module):
         return self.DFF_energy
 
     def SarADC_energy_calculation(self, mem_i_sequence) -> None:
+        # language=rst
+        """
+        Calculate energy for SarADC in the ADC module.
+
+        :param mem_i_sequence: The sequence of input currents of ADC to be quantized. 
+        """
         # in Cadence simulation, we fix Vread to 0.5V, with user-defined Vread (different from 0.5V)
         SarADC_energy_matrix = torch.zeros_like(mem_i_sequence)
         mem_r = torch.zeros_like(mem_i_sequence)
@@ -437,6 +480,12 @@ class ADC_Module_Power(torch.nn.Module):
 
 
     def adder_energy_calculation(self, num_adder) -> None:
+        # language=rst
+        """
+        Calculate energy for adders in the ADC module.
+
+        :param num_adder: The number of adders.
+        """
         self.adder_energy = 0
         self.adder_energy += (self.adder_cap_nand_input * 6) * self.vdd * self.vdd  # Input of 1 and 2 and Cin
         self.adder_energy += (self.adder_cap_nand_output * 2) * self.vdd * self.vdd  # Output of S[0] and 5
@@ -464,6 +513,12 @@ class ADC_Module_Power(torch.nn.Module):
 
 
     def shift_add_energy_calculation(self, mem_i_sequence) -> None:
+        # language=rst
+        """
+        Calculate energy for shift adders in the ADC module.
+
+        :param mem_i_sequence: The sequence of input currents of ADC to be quantized.
+        """
         read_times = mem_i_sequence.shape[1] * mem_i_sequence.shape[2]
         self.shift_add_energy += self.DFF_energy_calculation(
             mem_i_sequence.shape[3] * (self.ADC_precision + self.input_bit), self.input_bit) * read_times

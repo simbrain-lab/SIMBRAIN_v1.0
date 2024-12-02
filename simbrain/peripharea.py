@@ -5,6 +5,11 @@ import math
 import json
 
 class DAC_Module_Area(torch.nn.Module):
+    # language=rst
+    """
+    Abstract base class for area estimation of DAC Module.
+    """
+    
     def __init__(
         self,
         sim_params: dict = {},
@@ -19,9 +24,8 @@ class DAC_Module_Area(torch.nn.Module):
 
         :param sim_params: Memristor device to be used in learning.
         :param shape: The dimensionality of the crossbar.
+        :param CMOS_tech_info_dict: The parameters of CMOS technology.
         :param memristor_info_dict: The parameters of the memristor device.
-        :param length_row: The physical length of the horizontal wire in the crossbar.
-        :param length_col: The physical length of the vertical wire in the crossbar.
         """
         super().__init__()
 
@@ -50,6 +54,14 @@ class DAC_Module_Area(torch.nn.Module):
 
 
     def DFF_area_calculation(self, newHeight, newWidth, numDff):
+        # language=rst
+        """
+        Calculates the area of Dffs based on the provided dimensions and number of DFFs.
+
+        :param newHeight: The height available for placing DFFs. If `None`, defaults to calculating for a single row.
+        :param newWidth: The width available for placing DFFs. If `None`, defaults to calculating for a single row.
+        :param numDff: The total number of Dffs to be accommodated.
+        """
         # Assume DFF size is 12 minimum-size standard cells put together
         # widthTgN = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         # widthTgP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
@@ -97,6 +109,14 @@ class DAC_Module_Area(torch.nn.Module):
 
 
     def Switchmatrix_area_calculation(self, newHeight, newWidth, mode):
+        # language=rst
+        """
+        Calculates the area of the switch matrix based on the provided dimensions and mode.
+
+        :param newHeight: The height of the switch matrix. If `None`, it uses default height calculations.
+        :param newWidth: The width of the switch matrix. If `None`, it uses default width calculations..
+        :param mode: Specifies the connection mode. Can be 'ROW_MODE' or 'COLUMN_MODE'.
+        """
         resMemCellOnAtVw = 1 / self.Goff
         if mode == "ROW_MODE":  # Connect to rows
             minCellHeight = self.MAX_TRANSISTOR_HEIGHT * self.CMOS_technode_meter
@@ -184,6 +204,10 @@ class DAC_Module_Area(torch.nn.Module):
 
 
     def DAC_module_cal_area(self) -> None:
+        # language=rst
+        """
+        Calculates the total area of DAC module.
+        """
         relax_ratio_col = self.memristor_info_dict[self.device_name]['relax_ratio_col']  # Leave space for adjacent memristors
         relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_row']  # Leave space for adjacent memristors
         mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
@@ -195,6 +219,11 @@ class DAC_Module_Area(torch.nn.Module):
 
 
 class ADC_Module_Area(torch.nn.Module):
+    # language=rst
+    """
+    Abstract base class for area estimation of ADC Module.
+    """
+    
     def __init__(
         self,
         sim_params: dict = {},
@@ -237,6 +266,13 @@ class ADC_Module_Area(torch.nn.Module):
 
 
     def Adder_area_calculation(self, newWidth):
+        # language=rst
+        """
+        Calculates the area of the adder based on the provided width.
+
+        :param newWidth: The total width available for the adder array. If the provided width is smaller than the 
+                     minimum required width for a single adder, it is adjusted to this minimum width.
+        """
         widthNandN = 2 * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         widthNandP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         wNand, hNand = self.formula_function.calculate_gate_area("NAND", 2, widthNandN, widthNandP,
@@ -266,6 +302,13 @@ class ADC_Module_Area(torch.nn.Module):
 
 
     def ShiftAdder_area_calculation(self, newWidth):
+        # language=rst
+        """
+        Calculates the total area of the shift-adder circuit based on the provided width.
+
+        :param newWidth: TThe total available width for the adder array. If the provided width is smaller than the 
+                     minimum required width for a single adder, it is adjusted to this minimum width.
+        """
         numDff = (self.ADC_precision + self.input_bit) * self.shape[1]
 
         self.Adder_area_calculation(newWidth)
@@ -281,6 +324,13 @@ class ADC_Module_Area(torch.nn.Module):
 
 
     def DFF_area_calculation(self, newWidth, numDff):
+        # language=rst
+        """
+        Calculates the area of Dffs based on the provided width and number of DFFs.
+
+        :param newWidth: The width available for placing DFFs. 
+        :param numDff: The total number of Dffs to be accommodated.
+        """
         # Assume DFF size is 12 minimum-size standard cells put together
         # widthTgN = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         # widthTgP = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
@@ -310,6 +360,12 @@ class ADC_Module_Area(torch.nn.Module):
 
 
     def SarADC_area_calculation(self, widthArray):
+        # language=rst
+        """
+        Calculates the area of SarADC based on the provided array width.
+
+        :param widthArray: Determine the overall width of the SAR ADC module 
+        """
         widthNmos = self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         widthPmos = self.pnSizeRatio * self.MIN_NMOS_SIZE * self.CMOS_technode_meter
         wNmos, hNmos = self.formula_function.calculate_gate_area("INV", 1, widthNmos, 0,
@@ -325,19 +381,23 @@ class ADC_Module_Area(torch.nn.Module):
         self.SarADC_width = widthArray
         self.SarADC_height = self.SarADC_area / widthArray
 
-            # Assume the Current Mirrors are on the same row and the total width of them is smaller than the adder or DFF
+        # Assume the Current Mirrors are on the same row and the total width of them is smaller than the adder or DFF
 
         return self.SarADC_height, self.SarADC_width, self.SarADC_area
 
 
     def ADC_module_cal_area(self) -> None:
+        # language=rst
+        """
+        Calculates the total area of DAC module.
+        """
         relax_ratio_row = self.memristor_info_dict[self.device_name]['relax_ratio_row']  # Leave space for adjacent memristors
         mem_size = self.memristor_info_dict[self.device_name]['mem_size'] * 1e-9
         length_row = self.shape[1] * relax_ratio_row * mem_size
         ShiftAdder_Height, ShiftAdder_Width, ShiftAdder_Area = self.ShiftAdder_area_calculation(length_row)
         SarADC_Height, SarADC_Width, SarADC_Area = self.SarADC_area_calculation(length_row)
         ADC_total_height = ShiftAdder_Height + SarADC_Height
-        ADC_total_width = max(ShiftAdder_Width,SarADC_Width)
+        ADC_total_width = max(ShiftAdder_Width, SarADC_Width)
         return ADC_total_height, ADC_total_width, ShiftAdder_Area, SarADC_Area
 
 

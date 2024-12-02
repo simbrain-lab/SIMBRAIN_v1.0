@@ -155,7 +155,7 @@ class Nodes(torch.nn.Module):
                 self.transform.voltage_generation(self.trace_decay, plot=False)
 
 
-    def set_batch_size(self, batch_size) -> None:
+    def set_batch_size(self, batch_size, init_batch_sign) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
@@ -169,7 +169,7 @@ class Nodes(torch.nn.Module):
 
         if self.traces:
             self.x = torch.zeros(batch_size, *self.shape, device=self.x.device)
-            if (self.device_name != 'trace' and self.learning == True):
+            if (self.device_name != 'trace' and self.learning == True and init_batch_sign == True):
                 self.transform.set_batch_size_stdp(batch_size=self.batch_size, learning=self.learning)
 
         if self.sum_input:
@@ -1165,14 +1165,14 @@ class DiehlAndCookNodes(Nodes):
             -self.dt / self.tc_theta_decay
         )  # Adaptive threshold decay (per timestep).
 
-    def set_batch_size(self, batch_size) -> None:
+    def set_batch_size(self, batch_size, init_batch_sign) -> None:
         # language=rst
         """
         Sets mini-batch size. Called when layer is added to a network.
 
         :param batch_size: Mini-batch size.
         """
-        super().set_batch_size(batch_size=batch_size)
+        super().set_batch_size(batch_size=batch_size, init_batch_sign=init_batch_sign)
         self.v = self.rest * torch.ones(batch_size, *self.shape, device=self.v.device)
         self.refrac_count = torch.zeros_like(self.v, device=self.refrac_count.device)
 

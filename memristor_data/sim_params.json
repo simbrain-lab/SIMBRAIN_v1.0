@@ -1,0 +1,17 @@
+{
+  "device_name": "mine",
+  "c2c_variation": true,
+  "d2d_variation": 1,
+  "stuck_at_fault": false,
+  "retention_loss": false,
+  "aging_effect": 0,
+  "CMOS_technode": 32,
+  "wire_width": 10000,
+  "input_bit": 1,
+  "ADC_precision": 16,
+  "ADC_rounding_function":"floor",
+  "ADC_setting": 4,
+  "device_roadmap":"HP",
+  "temperature":300,
+  "hardware_estimation":false
+}

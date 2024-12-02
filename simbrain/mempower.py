@@ -75,7 +75,7 @@ class Power(torch.nn.Module):
     def read_energy_calculation(self, mem_v_bool, mem_c, total_wire_resistance) -> None:
         # language=rst
         """
-        Calculate read energy for memrisotr crossbar. Called when the crossbar is read.
+        Calculate read energy for memristor crossbar. Called when the crossbar is read.
 
         :param mem_v_bool: Read voltage, shape [batchsize, read_no=1, crossbar_row], type: bool.
         :param mem_c: Memristor crossbar conductance, shape [batchsize, crossbar_row, crossbar_col].
@@ -94,10 +94,10 @@ class Power(torch.nn.Module):
         self.read_energy = self.dynamic_read_energy + self.static_read_energy
 
 
-    def write_energy_calculation(self, mem_v, mem_c, mem_c_pre, total_wire_resistance) -> None:
+    def write_energy_calculation(self, mem_v, mem_v_amp, mem_c, mem_c_pre, total_wire_resistance) -> None:
         # language=rst
         """
-        Calculate write energy for memrisotr crossbar. Called when the crossbar is wrote.
+        Calculate write energy for memristor crossbar. Called when the crossbar is wrote.
 
         :param mem_v: Write voltage, shape [batchsize, crossbar_row, crossbar_col].
         :param mem_c: Memristor crossbar conductance after write, shape [batchsize, crossbar_row, crossbar_col].
@@ -115,38 +115,38 @@ class Power(torch.nn.Module):
             self.selected_write_energy = mem_v * mem_v * self.dr * self.dt * mem_c
             self.static_write_energy += torch.sum(self.selected_write_energy)
 
-        elif self.device_structure in {'crossbar', 'mimo'}:
-            V_write = self.memristor_luts[self.device_name]['voltage']
+        elif self.device_structure in {'crossbar', 'STDP_crossbar'}:
+            for V_write in mem_v_amp:
+                # Col cap dynamic write energy
+                mem_v_1 = torch.where(mem_v==V_write, 0, V_write)
+                self.dynamic_write_energy += torch.sum(mem_v_1 * mem_v_1 * self.wire_cap_col)
 
-            # Col cap dynamic write energy
-            self.dynamic_write_energy += torch.sum((V_write - mem_v) * (V_write - mem_v) * self.wire_cap_col)
+                # Row cap dynamic write energy
+                # 1 selected using V_write; (self.shape[0] - 1) half selected using 1/2 V_write
+                self.dynamic_write_energy += self.shape[0] * V_write * V_write * self.wire_cap_row * (1 + 1 / 4 * (
+                            self.shape[0] - 1))
 
-            # Row cap dynamic write energy
-            # 1 selected using V_write; (self.shape[0] - 1) half selected using 1/2 V_write
-            self.dynamic_write_energy += self.shape[0] * V_write * V_write * self.wire_cap_row * (1 + 1 / 4 * (
-                        self.shape[0] - 1))
+                # static write energy
+                # Seleceted write energy
+                selected_mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
+                selected_mem_r = selected_mem_r + total_wire_resistance.unsqueeze(0)
+                selected_mem_c = 1.0 / selected_mem_r
+                self.selected_write_energy = ((V_write - mem_v_1) * (V_write - mem_v_1) * self.dr * self.dt * selected_mem_c)
 
-            # static write energy
-            # Seleceted write energy
-            selected_mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
-            selected_mem_r = selected_mem_r + total_wire_resistance.unsqueeze(0)
-            selected_mem_c = 1.0 / selected_mem_r
-            self.selected_write_energy = (mem_v * mem_v * self.dr * self.dt * selected_mem_c)
+                # half selected write energy
+                r_after = 1.0 / mem_c
+                r_after = r_after + total_wire_resistance.unsqueeze(0)
+                c_after = 1.0 / r_after
 
-            # half selected write energy
-            r_after = 1.0 / mem_c
-            r_after = r_after + total_wire_resistance.unsqueeze(0)
-            c_after = 1.0 / r_after
+                r_pre = 1.0 / mem_c_pre
+                r_pre = r_pre + total_wire_resistance.unsqueeze(0)
+                c_pre = 1.0 / r_pre
 
-            r_pre = 1.0 / mem_c_pre
-            r_pre = r_pre + total_wire_resistance.unsqueeze(0)
-            c_pre = 1.0 / r_pre
+                counter = torch.arange(self.shape[0], device=self.selected_write_energy.device)
+                self.half_selected_write_energy = (1 / 2 * V_write) * (1 / 2 * V_write) * self.dr * self.dt * (
+                            counter[None, :, None] * c_pre + counter.flip(0)[None, :, None] * c_after)
 
-            counter = torch.arange(self.shape[0], device=self.selected_write_energy.device)
-            self.half_selected_write_energy = (1 / 2 * V_write) * (1 / 2 * V_write) * self.dr * self.dt * (
-                        counter[None, :, None] * c_pre + counter.flip(0)[None, :, None] * c_after)
-
-            self.static_write_energy += torch.sum(self.selected_write_energy) + torch.sum(self.half_selected_write_energy)
+                self.static_write_energy += torch.sum(self.selected_write_energy) + torch.sum(self.half_selected_write_energy)
 
             # # static write energy
             # for write_row in range(self.shape[0]):
@@ -180,28 +180,21 @@ class Power(torch.nn.Module):
     def reset_energy_calculation(self, mem_v, mem_c, mem_c_pre, total_wire_resistance) -> None:
         # language=rst
         """
-        Calculate reset energy for memrisotr crossbar. Called when the crossbar is reset.
+        Calculate reset energy for memristor crossbar. Called when the crossbar is reset.
 
         :param mem_v: Reset voltage, shape [batchsize, crossbar_row, crossbar_col].
         :param mem_c: Memristor crossbar conductance after reset, shape [batchsize, crossbar_row, crossbar_col].
         :param mem_c_pre: Memristor crossbar conductance before reset, shape [batchsize, crossbar_row, crossbar_col].
         :param total_wire_resistance: Wire resistance for every memristor in the crossbar, shape [batchsize, crossbar_row, crossbar_col].
         """
-        if self.device_structure == 'trace':
-            raise Exception("In the trace architecture, mem_write is used instead of mem_reset!")
+        # Dynamic reset energy
+        self.dynamic_reset_energy += torch.sum(mem_v[:, 0, :] * mem_v[:, 0, :] * self.wire_cap_col)
 
-        elif self.device_structure in {'crossbar', 'mimo'}:
-            # Dynamic reset energy
-            self.dynamic_reset_energy += torch.sum(mem_v[:, 0, :] * mem_v[:, 0, :] * self.wire_cap_col)
-
-            # Static write energy
-            mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
-            mem_r = mem_r + total_wire_resistance.unsqueeze(0)
-            mem_c = 1.0 / mem_r
-            self.static_reset_energy += torch.sum(mem_v * mem_v * self.dr * self.dt * mem_c) #?why 1/2
-
-        else:
-            raise Exception("Only trace, mimo and crossbar architecture are supported!")
+        # Static write energy
+        mem_r = 1.0 / (1 / 2 * (mem_c + mem_c_pre))
+        mem_r = mem_r + total_wire_resistance.unsqueeze(0)
+        mem_c = 1.0 / mem_r
+        self.static_reset_energy += torch.sum(mem_v * mem_v * self.dr * self.dt * mem_c) #?why 1/2
 
         self.reset_energy = self.dynamic_reset_energy + self.static_reset_energy
 
@@ -209,7 +202,7 @@ class Power(torch.nn.Module):
     def total_energy_calculation(self, mem_t) -> None:
         # language=rst
         """
-        Calculate total energy for memrisotr crossbar. Called when power is reported.
+        Calculate total energy for memristor crossbar. Called when power is reported.
 
         :param mem_t: Time of the memristor crossbar.
         """

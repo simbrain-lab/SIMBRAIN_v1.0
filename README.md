@@ -24,13 +24,13 @@ git clone https://github.com/simbrain-lab/SIMBRAIN_v1.0.git
 
 Required platform:	`Python 3.8`,  `PyTorch 1.13`
 
-Required packages:	`numpy`,  `pandas`
+Required packages:	`numpy`,  `pandas`,  `matplotlib`
 
 ### Requirements for different scenarios
 
-Scenario 1: Device to Model:	`scipy`,  `psutil`
+Scenario 1: Device to Model:	`scikit-learn`,  `psutil`
 
-Scenario 2: Model to NN:	`torchvision`,  `cv2`,  `tqdm`
+Scenario 2: Model to NN:	`torchvision`,  `opencv-python`,  `tqdm`
 
 Scenario 3: Device to NN:	Both the required packages for scenario 1 and scenario 2.
 
@@ -84,7 +84,7 @@ Circuit configuration：
 |        Parameter        |                          Definition                          |  Default   |
 | :---------------------: | :----------------------------------------------------------: | :--------: |
 |  --memristor_structure  | Chose the memristor structure, three are provided here: 'trace', 'crossbar', and 'STDP_crossbar' | 'crossbar' |
-|       --input_bit       | The DAC resolution: int (1-64 for STDP, 2-64 for MLP & CNN)  |     8      |
+|       --input_bit       |   The DAC resolution: int (1 for STDP, 2-64 for MLP & CNN)   |     8      |
 |     --ADC_precision     |                The ADC resolution: int (2-32)                |     16     |
 |      --ADC_setting      | 2 or 4. Employing four sets equips each memristor crossbar with a dedicated ADC. Using two sets integrates two crossbars vertically due to their summable currents per column, allowing them to share a single ADC set. |     4      |
 | --ADC_rounding_function |                      'floor' or 'round'                      |  'floor'   |
